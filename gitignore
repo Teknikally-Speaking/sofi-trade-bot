@@ -1,0 +1,23 @@
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environment
+.env
+*.env
+
+# API keys (just in case)
+apikeys.txt
+secrets.txt
+
+# Logs
+*.log
+*.csv
+sofi_trade_log.csv
+sofi_open_positions.csv
+
+# System files
+.DS_Store
+Thumbs.db
