@@ -11,14 +11,14 @@ import os
 from datetime import datetime, timedelta
 
 # --- Alpaca Config (for price data only) ---
-ALPACA_API_KEY = 'PK5Y7O0LXDMRYB5C89F1'
-ALPACA_SECRET_KEY = 'N9VXrxRHdJtnehEXKGDNdxz2IW3PQcaTkyhmorfE'
+ALPACA_API_KEY = 'YOUR_ALPACA_API_KEY'
+ALPACA_SECRET_KEY = 'YOUR_ALPACA_SECRET_KEY'
 ALPACA_BASE_URL = 'https://paper-api.alpaca.markets'
 
 # --- Tradier Config (for options trading) ---
-TRADIER_ACCESS_TOKEN = '4n5VzTUFF87ED2B9knP5cNTBCL7D'
+TRADIER_ACCESS_TOKEN = 'YOUR_TRADIER_ACCESS_TOKEN'
 TRADIER_BASE_URL = 'https://sandbox.tradier.com/v1'
-ACCOUNT_ID = 'VA5782235'  # Replace with actual if in production
+ACCOUNT_ID = 'YOUR_TRADIER_ID'  # Replace with actual if in production
 
 HEADERS = {
     'Authorization': f'Bearer {TRADIER_ACCESS_TOKEN}',
