@@ -1,5 +1,9 @@
-
-# ✅ Final updated SOFI bot with duplicate trade prevention and auto-close logic
+# ✅ FINAL UPDATED SOFI BOT v3 — With Auto-Close + Duplicate Trade Prevention
+# Author: Teknikally Speaking
+# This bot uses EMA crossover signals on SOFI stock to trade options using the Tradier API
+# - It avoids placing duplicate trades
+# - It auto-closes options after X hours
+# - It supports fallback trend-based trades if no EMA crossover occurs
 
 import requests
 import time
@@ -10,31 +14,35 @@ import json
 import os
 from datetime import datetime, timedelta
 
-# --- Alpaca Config (for price data only) ---
+# --- Alpaca API CONFIG (for stock price data only, NOT for trades) ---
 ALPACA_API_KEY = 'YOUR_ALPACA_API_KEY'
 ALPACA_SECRET_KEY = 'YOUR_ALPACA_SECRET_KEY'
 ALPACA_BASE_URL = 'https://paper-api.alpaca.markets'
 
-# --- Tradier Config (for options trading) ---
+# --- Tradier API CONFIG (used for placing options trades) ---
 TRADIER_ACCESS_TOKEN = 'YOUR_TRADIER_ACCESS_TOKEN'
 TRADIER_BASE_URL = 'https://sandbox.tradier.com/v1'
-ACCOUNT_ID = 'YOUR_TRADIER_ID'  # Replace with actual if in production
+ACCOUNT_ID = 'YOUR_TRADIER_ID'  # Replace with your actual Tradier account ID
 
 HEADERS = {
     'Authorization': f'Bearer {TRADIER_ACCESS_TOKEN}',
     'Accept': 'application/json'
 }
 
+# --- Trading Parameters ---
 SYMBOL = 'SOFI'
 FAST_EMA = 9
 SLOW_EMA = 21
-HOLDING_THRESHOLD_HOURS = 4  # close trades after this many hours
+HOLDING_THRESHOLD_HOURS = 4  # Auto-close options after 4 hours
 POSITION_LOG = 'open_positions.json'
 
+# Track daily trading activity
 last_trade_date = None
 
+# Initialize Alpaca API (for price data only)
 alpaca_api = tradeapi.REST(ALPACA_API_KEY, ALPACA_SECRET_KEY, ALPACA_BASE_URL, api_version='v2')
 
+# Check if today is a new trading day
 def is_new_trading_day():
     global last_trade_date
     today = datetime.now().date()
@@ -43,13 +51,15 @@ def is_new_trading_day():
         return True
     return False
 
+# Get the expiration date for the next Friday (used for option selection)
 def get_next_friday():
     today = datetime.today()
-    days_ahead = 4 - today.weekday()
+    days_ahead = 4 - today.weekday()  # Friday = 4
     if days_ahead <= 0:
         days_ahead += 7
     return (today + timedelta(days=days_ahead)).strftime("%Y-%m-%d")
 
+# Pull recent price data from Alpaca
 def get_price_data(symbol, timeframe='5Min', limit=100):
     barset = alpaca_api.get_bars(symbol, timeframe, limit=limit).df
     if barset.empty:
@@ -57,11 +67,13 @@ def get_price_data(symbol, timeframe='5Min', limit=100):
         return None
     return barset.reset_index()
 
+# Calculate EMA indicators for trend logic
 def calculate_ema(data, fast=9, slow=21):
     data['EMA9'] = data['close'].ewm(span=fast, adjust=False).mean()
     data['EMA21'] = data['close'].ewm(span=slow, adjust=False).mean()
     return data
 
+# Check for crossover signals (BUY/SELL triggers)
 def check_signal(data):
     if data['EMA9'].iloc[-2] < data['EMA21'].iloc[-2] and data['EMA9'].iloc[-1] > data['EMA21'].iloc[-1]:
         return 'buy'
@@ -69,6 +81,7 @@ def check_signal(data):
         return 'sell'
     return None
 
+# Identify current market trend direction
 def get_trend_direction(data):
     if data['EMA9'].iloc[-1] > data['EMA21'].iloc[-1]:
         return 'up'
@@ -76,6 +89,7 @@ def get_trend_direction(data):
         return 'down'
     return 'sideways'
 
+# Retrieve option chain for the symbol and expiration
 def get_option_chain(symbol, expiration=None):
     url = f"{TRADIER_BASE_URL}/markets/options/chains"
     params = {"symbol": symbol, "greeks": "false"}
@@ -89,6 +103,7 @@ def get_option_chain(symbol, expiration=None):
         print("❌ JSON Decode Error:", e)
         return None
 
+# Place a market order to open an options trade
 def place_option_order(symbol, option_symbol, side):
     url = f"{TRADIER_BASE_URL}/accounts/{ACCOUNT_ID}/orders"
     payload = {
@@ -108,6 +123,7 @@ def place_option_order(symbol, option_symbol, side):
         log_trade(symbol, option_symbol, side)
         track_position(option_symbol, side)
 
+# Find the best option near current stock price
 def find_near_money_call_put(option_chain, side='call'):
     if 'options' not in option_chain:
         return None
@@ -122,11 +138,13 @@ def find_near_money_call_put(option_chain, side='call'):
                 continue
     return None
 
+# Save executed trade to a CSV log
 def log_trade(symbol, option_symbol, action, status="executed"):
     with open('sofi_trade_log.csv', mode='a', newline='') as file:
         writer = csv.writer(file)
         writer.writerow([datetime.now().strftime("%Y-%m-%d %H:%M:%S"), symbol, option_symbol, action, status])
 
+# Track open positions to prevent duplicates
 def track_position(option_symbol, side):
     position = {"symbol": option_symbol, "side": side, "timestamp": datetime.now().isoformat()}
     data = []
@@ -137,6 +155,7 @@ def track_position(option_symbol, side):
     with open(POSITION_LOG, 'w') as f:
         json.dump(data, f, indent=2)
 
+# Check if a trade has already been placed for this option
 def is_duplicate_trade(option_symbol):
     if os.path.exists(POSITION_LOG):
         with open(POSITION_LOG, 'r') as f:
@@ -146,10 +165,12 @@ def is_duplicate_trade(option_symbol):
                     return True
     return False
 
+# Simulate closing option (this is just logging for now)
 def close_option_order(option_symbol):
     print(f"⏳ Closing expired position: {option_symbol} (simulated)")
     log_trade(SYMBOL, option_symbol, 'sell_to_close', 'auto-closed')
 
+# Remove old positions from log after threshold
 def close_expired_positions():
     if not os.path.exists(POSITION_LOG):
         return
@@ -169,12 +190,14 @@ def close_expired_positions():
 # --- MAIN LOOP ---
 while True:
     try:
-        close_expired_positions()
+        close_expired_positions()  # 🔁 Auto-close logic runs before any trades
+
         df = get_price_data(SYMBOL)
         if df is None or df.empty:
             print("⏳ No data. Retrying in 5 min...")
             time.sleep(300)
             continue
+
         df = calculate_ema(df)
         print(f"📊 EMA Check → EMA9: {df['EMA9'].iloc[-1]:.4f}, EMA21: {df['EMA21'].iloc[-1]:.4f}")
         signal = check_signal(df)
@@ -209,4 +232,4 @@ while True:
     except Exception as e:
         print(f"❌ Error: {e}")
 
-    time.sleep(300)  # 5 minutes
+    time.sleep(300)  # ⏱️ Wait 5 minutes before next check
